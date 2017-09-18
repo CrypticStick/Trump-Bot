@@ -432,8 +432,9 @@ namespace Trump_Bot
 
         private void ChkUsername_CheckedChanged(object sender, EventArgs e)
         {
-
+            usernameSwap = true;
+            Refresh_Users();
+            usernameSwap = false;
         }
-
     }
 }
