@@ -3,28 +3,25 @@ using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using static Trump_Bot.Modules.Connect4;
 
 namespace Trump_Bot.Modules
 {
     class Conditionals
     {
-        private DiscordSocketClient _client;
-        private MainForm _gui;
-        public List<IMessage> DeletedMessages = new List<IMessage>();
+        private DiscordSocketClient _client = Program.client;
+        private MainForm _gui = Program.gui;
+        public static List<IMessage> DeletedMessages = new List<IMessage>();
 
-        public async Task InitializeConditionals(DiscordSocketClient client, MainForm gui)
+        public async Task InitializeConditionals()
         {
-            _client = client;
-            _gui = gui;
             _client.MessageReceived += MessageReceived;
             _client.MessageDeleted += MessageDeleted;
             _client.MessageUpdated += MessageUpdated;
             _client.ReactionAdded += _client_ReactionAdded;
             _client.UserBanned += _client_UserBanned;
-
-            await Commands.ImportLists(DeletedMessages);
         }
 
         private async Task _client_UserBanned(SocketUser user, SocketGuild server)
@@ -34,9 +31,30 @@ namespace Trump_Bot.Modules
 
         private async Task _client_ReactionAdded(Cacheable<IUserMessage, ulong> message, ISocketMessageChannel channel, SocketReaction reaction)
         {
-            if (reaction.Message.GetValueOrDefault().Author.Id == 321097604131717120)
+            if (reaction.UserId == _client.CurrentUser.Id) return;
+            var _Connect4Session = GrabConnect4Session(channel);
+            if (_Connect4Session != null)
             {
-                await reaction.Message.GetValueOrDefault().RemoveAllReactionsAsync();
+                new Thread(async () =>
+                {
+                    if (!ReactionButtons.Contains(reaction.Emote) || (_Connect4Session.PlayerOne != reaction.User.Value || _Connect4Session.PlayerTwo != reaction.User.Value))
+                    {
+                        try { await reaction.Message.GetValueOrDefault().RemoveReactionAsync(reaction.Emote, reaction.User.Value); }
+                        catch { }
+                        return;
+                    }
+                    if (_Connect4Session.LastSentMessage.Id == message.Id)
+                    {
+                        if (_Connect4Session.PlayerTurn == 1 && _Connect4Session.PlayerOne == (SocketUser)reaction.User)
+                            _Connect4Session.RequestedColumn = ReactionButtons.IndexOf((Emoji)reaction.Emote) + 1;
+                        else if (_Connect4Session.PlayerTurn == 2 && _Connect4Session.PlayerTwo == (SocketUser)reaction.User)
+                            _Connect4Session.RequestedColumn = ReactionButtons.IndexOf((Emoji)reaction.Emote) + 1;
+                        _Connect4Session.Flags = "loading";
+                        while (_Connect4Session.Flags == "loading") { }
+                        try { await reaction.Message.GetValueOrDefault().RemoveReactionAsync(reaction.Emote, reaction.User.Value); }
+                        catch { }
+                    }
+                }).Start();
             }
         }
 
@@ -139,48 +157,38 @@ namespace Trump_Bot.Modules
             var allowedChannels = System.IO.File.ReadAllLines("AllowTriggersList.txt");
             if (!allowedChannels.Contains(message.Channel.Id.ToString())) return;
 
-            string triggers(string value)
-            {
-                if (value.Contains("smart"))
-                    return "My IQ is one of the highest — and you all know it! Please don’t feel so stupid or insecure; it’s not your fault.";
-                else if (value.Contains("humble"))
-                    return "I think I am actually humble. I think I’m much more humble than you would understand.";
-                else if (value.Contains("fnn"))
-                    return "https://www.youtube.com/watch?v=Ci4QZ82n2i8";
-                else if (value.Contains("elect"))
-                    return "We should just cancel the election and just give it to Trump.";
-                else if (value.Contains("gun"))
-                    return "If she gets to pick her judges – nothing you can do, folks.Although, the Second Amendment people. Maybe there is.I don’t know.";
-                else if (value.Contains("nuke"))
-                    return "Why can’t we use nuclear weapons?";
-                else if (value.Contains("baby") || value.Contains("babies"))
-                    return "I love babies ..." + Environment.NewLine + "Actually, I was only kidding. You can get that baby out of here. Don’t worry, I think she really believed me that I love having a baby crying while I’m speaking.";
-                else if (value.Contains("covfefe"))
-                    return "Despite the constant negative press covfefe";
-                else if (value.Contains("email"))
-                    return "Russia, if you’re listening, I hope you’re able to find the 30,000 emails that are missing. I think you will probably be rewarded mightily by our press.";
-                else if (value.Contains("wall"))
-                    return "I will build a great wall – and nobody builds walls better than me, believe me – and I’ll build them very inexpensively. I will build a great, great wall on our southern border, and I will make Mexico pay for that wall. Mark my words.";
-                else if (value.Contains("china"))
-                    return "I love China.";
-                else if (value.Contains("delete"))
-                    return "Did I hear \"delete\"? WE CAN'T DELETE THINGS. You remember Hillary's history, right?";
-                else if (value.Contains("spin"))
-                    return "SPIN TO WIN! VSSSSSSSSSSSSSSSHHH I LOVE MY FIDGET SPINNER WEEEEEEEEEEEEEEEE!!!";
-                else if (value.Contains("kim jong"))
-                    return "Kim Jong Un is 27 years old. His father dies, took over a regime. So say what you want but that is not easy, especially at that age.";
-                else if (value.Contains("9/11") || value.Contains("911")) {
-                    Random rand = new Random();
-                    if (rand.Next(0, 2) == 0) return "I was down there, and I watched our police and our firemen, down on 7-Eleven, down at the World Trade Center, right after it came down.";
-                    else return "40 Wall Street actually was the second-tallest building in downtown Manhattan... And now it’s the tallest.";
-                }
-                else if (value.Contains("lie"))
-                    return "I might lie to you like Hillary does all the time, but I'll never lie to Giacomo, okay?";
-                else return null;
-            }
 
-            if (triggers(msg.ToLower()) != null)
-                await message.Channel.SendMessageAsync(triggers(msg.ToLower()));
+            string[,] TriggerList = new string[,]
+            {
+                {"smart", "My IQ is one of the highest — and you all know it! Please don’t feel so stupid or insecure; it’s not your fault."},
+                {"humble", "I think I am actually humble. I think I’m much more humble than you would understand."},
+                {"fnn", "https://www.youtube.com/watch?v=Ci4QZ82n2i8"},
+                {"elect", "We should just cancel the election and just give it to Trump."},
+                {"gun", "If she gets to pick her judges – nothing you can do, folks.Although, the Second Amendment people. Maybe there is.I don’t know."},
+                {"nuke", "Why can’t we use nuclear weapons?"},
+                {"baby", "I love babies ..." + Environment.NewLine + "Actually, I was only kidding. You can get that baby out of here. Don’t worry, I think she really believed me that I love having a baby crying while I’m speaking."},
+                {"babies", "I love babies ..." + Environment.NewLine + "Actually, I was only kidding. You can get that baby out of here. Don’t worry, I think she really believed me that I love having a baby crying while I’m speaking."},
+                {"covfefe", "Despite the constant negative press covfefe"},
+                {"email", "Russia, if you’re listening, I hope you’re able to find the 30,000 emails that are missing. I think you will probably be rewarded mightily by our press."},
+                {"wall", "I will build a great wall – and nobody builds walls better than me, believe me – and I’ll build them very inexpensively. I will build a great, great wall on our southern border, and I will make Mexico pay for that wall. Mark my words."},
+                {"china", "I love China."},
+                {"delete", "Did I hear \"delete\"? WE CAN'T DELETE THINGS. You remember Hillary's history, right?"},
+                {"spin", "SPIN TO WIN! VSSSSSSSSSSSSSSSHHH I LOVE MY FIDGET SPINNER WEEEEEEEEEEEEEEEE!!!"},
+                {"kim jong", "Kim Jong Un is 27 years old. His father dies, took over a regime. So say what you want but that is not easy, especially at that age."},
+                {"9/11", "I was down there, and I watched our police and our firemen, down on 7-Eleven, down at the World Trade Center, right after it came down."},
+                {"911", "40 Wall Street actually was the second-tallest building in downtown Manhattan... And now it’s the tallest."},
+                {"lie", "I might lie to you like Hillary does all the time, but I'll never lie to Giacomo, okay?"},
+                {"bing", "BING BING BONG BONG"}
+            };
+
+            string CheckForTrigger()
+            {
+                for (var i = 0; i <= TriggerList.Length / 2; i++)
+                    if (msg.ToLower().Contains(TriggerList[i, 0])) return TriggerList[i, 1];
+                return null;
+            }
+            if (CheckForTrigger() != null)
+                await message.Channel.SendMessageAsync(CheckForTrigger());
         }
 
         public async Task MessageDeleted(Cacheable<IMessage, ulong> message, ISocketMessageChannel channel)

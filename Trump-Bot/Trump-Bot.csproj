@@ -169,6 +169,7 @@
     <Compile Include="Modules\CommandHandler.cs" />
     <Compile Include="Modules\Commands.cs" />
     <Compile Include="Modules\Conditionals.cs" />
+    <Compile Include="Modules\Connect4.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="MainForm.resx">

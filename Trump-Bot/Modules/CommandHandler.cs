@@ -9,30 +9,28 @@ using System.Threading.Tasks;
 
 namespace Trump_Bot.Modules
 {
-    class CommandHandler
+    static class CommandHandler
     {
-        private DiscordSocketClient _client;
-        public CommandService _service;
-        MainForm _gui = new MainForm();
+        private static DiscordSocketClient _client = Program.client;
+        public static CommandService service;
+        static MainForm _gui = new MainForm();
 
-        public CommandService Service
+        public static CommandService Service
         {
-            get { return _service; }
+            get { return service; }
         }
 
-        public async Task InitializeAsync(DiscordSocketClient client)
+        public static async Task InitializeAsync()
         {
-            _client = client;
-            _service = new CommandService();
-            _service.Log += _gui.LogConsole;
+            service = new CommandService();
+            service.Log += _gui.LogConsole;
 
-            await _service.AddModulesAsync(Assembly.GetEntryAssembly());
-            await Commands.ImportClient(_service, _client);
+            await service.AddModulesAsync(Assembly.GetEntryAssembly());
 
             _client.MessageReceived += HandleCommandAsync;
         }
 
-        private async Task HandleCommandAsync(SocketMessage s)
+        private static async Task HandleCommandAsync(SocketMessage s)
         {
             var msg = s as SocketUserMessage;
             if (msg == null) return;
@@ -43,13 +41,13 @@ namespace Trump_Bot.Modules
 
             var context = new SocketCommandContext(_client, msg);
 
-            var result = await _service.ExecuteAsync(context, argPos);
+            var result = await service.ExecuteAsync(context, argPos);
 
             if (!result.IsSuccess && result.Error != CommandError.UnknownCommand)
             {
                 await context.Channel.SendMessageAsync(result.ErrorReason);
             }
-            _service.Log += _gui.LogConsole;
+            service.Log += _gui.LogConsole;
         }
     }
 }

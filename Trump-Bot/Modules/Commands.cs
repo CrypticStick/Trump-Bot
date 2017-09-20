@@ -6,18 +6,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using static Trump_Bot.Modules.Connect4;
 
 namespace Trump_Bot.Modules
 {
     public class Commands : ModuleBase<SocketCommandContext>
     {
-        private static CommandService _service;
-        private static DiscordSocketClient _client;
-        private static List<IMessage> DeletedMessages = new List<IMessage>();
-        public static List<Connect4Session> Connect4 = new List<Connect4Session>();
+        private static CommandService _service = CommandHandler.service;
+        private static DiscordSocketClient _client = Program.client;
+        public static List<IMessage> DeletedMessages = Conditionals.DeletedMessages;
         private static List<string> pics = new List<string>()
         {
             "https://m.popkey.co/160d81/k08O5.gif?c=popkey-web&p=popkey&i=hotlinebling&l=direct&f=.gif",
@@ -40,16 +39,6 @@ namespace Trump_Bot.Modules
             "https://img.washingtonpost.com/blogs/the-fix/files/2015/11/9_BingBong_CNN.gif"
         };
 
-        public async static Task ImportClient(CommandService service, DiscordSocketClient client)
-        {
-            _service = service;
-            _client = client;
-        }
-
-        public async static Task ImportLists(List<IMessage> list)
-        {
-            DeletedMessages = list;
-        }
         private async Task temporaryMessage(string message, ISocketMessageChannel channel, int milliDelay)
         {
             new Thread(async () =>
@@ -110,288 +99,23 @@ namespace Trump_Bot.Modules
             await Context.Channel.SendMessageAsync(fullmessage);
         }
 
-        public class Connect4Session
-        {
-            public ISocketMessageChannel Channel { get; set; }
-            public SocketUser PlayerOne { get; set; }
-            public SocketUser PlayerTwo { get; set; }
-            public Int32 PlayerTurn { get; set; }
-            public List<List<Int32>> Gameboard { get; set; }
-            public Int32 RequestedColumn { get; set; }
-            public string Flags { get; set; }
-        }
-
-        public async Task StartConnect4Game(ISocketMessageChannel _channel)
-        {
-            new Thread(async () =>
-            {
-                string emptySlot = "⚪";
-                string playerPiece1 = "🔵";
-                string playerPiece2 = "🔴";
-
-                //Terminates the game cleanly
-                async Task terminateGame(Connect4Session session, bool silent)
-                {
-                    Connect4.Remove(session);
-                    if (!silent)
-                    {
-                        await session.Channel.SendMessageAsync("The match has been terminated.");
-                    }
-                    return;
-                }
-
-                //Creates a brand new board (Connect4 needs a 7x6 board)
-                List<List<Int32>> createNewBoard(int x, int y)
-                {
-                    List<List<Int32>> boardPositions = new List<List<Int32>>();
-                    for (int i = 0; i < y; i++)
-                    {
-                        boardPositions.Add(new List<Int32>());
-                        for (int e = 0; e < x; e++)
-                        {
-                            boardPositions[i].Add(0);
-                        }
-                    }
-                    return boardPositions;
-                }
-
-                //Draws current session's gameboard
-                string drawGameboard(Connect4Session session)
-                {
-                    string _gameboard = "≋ 𝟙      𝟚      𝟛     𝟜      𝟝      𝟞     𝟟 ≋" + Environment.NewLine;
-                    for (int i = 0; i < 6; i++)
-                    {
-                        string _gameboardRow = "|";
-                        for (int e = 0; e < 7; e++)
-                        {
-                            _gameboardRow = _gameboardRow + session.Gameboard[i][e] + "|";
-                        }
-                        _gameboard = _gameboard + _gameboardRow + Environment.NewLine;
-                    }
-                    _gameboard = _gameboard.Replace("0", emptySlot).Replace("1", playerPiece1).Replace("2", playerPiece2);
-                    return _gameboard;
-                }
-
-                //Checks if there is a pre-existing session, and grabs it if there is.
-                Connect4Session grabSession()
-                {
-                    Connect4Session _CurrentSession = null;
-                    foreach (Connect4Session session in Connect4)
-                        if (session.Channel == _channel) _CurrentSession = session;
-                    return _CurrentSession;
-                }
-
-                if (grabSession() == null) return;
-                if (grabSession().PlayerTwo == null) await WaitForPlayerTwo(grabSession());
-                await playGame(grabSession());
-
-                //Game waits for player 2, and sets up game once ready
-                async Task WaitForPlayerTwo(Connect4Session session)
-                {
-                    await session.Channel.SendMessageAsync("Connect4™ match will begin when another player joins...");
-
-                    //Waits for player 2, closes game if desired
-                    while (session.PlayerTwo == null)
-                        if (session.Flags == "end")
-                        {
-                            await terminateGame(session, false);
-                            return;
-                        }
-                        else await Task.Delay(1000);
-
-                    session.PlayerTurn = 1;
-                    session.Gameboard = createNewBoard(7, 6);
-                    session.Flags = "incomplete";
-                    session.RequestedColumn = 0;
-                    Console.WriteLine("A game of Connect 4 has begun!");
-                }
-
-                //Attempts to update the gameboard, returns true if successful
-                bool UpdateGameboard(Connect4Session session, RestUserMessage msg)
-                {
-                    try { msg.DeleteAsync(); }
-                    catch { }
-
-                    var success = false;
-                    for (int i = session.Gameboard.Count - 1; i >= 0; i--)
-                    {
-                        if (session.Gameboard[i][session.RequestedColumn-1] == 0)
-                        {
-                            session.Gameboard[i][session.RequestedColumn-1] = session.PlayerTurn;
-                            success = true;
-                            break;
-                        }
-                    }
-                    return success;
-                }
-
-                string FourInARow(Connect4Session session)
-                {
-                    //CODE TO CHECK FOR 4 IN A ROW
-                    //    ≋ 𝟙   𝟚   𝟛   𝟜   𝟝   𝟞   𝟟 ≋ (Spots in horizontal rows (2nd input))
-                    // 1  | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-                    // 2  | 0 | 2 | 0 | 0 | 0 | 0 | 0 |
-                    // 3  | 0 | 2 | 2 | 0 | 0 | 1 | 0 |
-                    // 4  | 0 | 2 | 0 | 2 | 1 | 0 | 0 |
-                    // 5  | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
-                    // 6  | 0 | 0 | 1 | 1 | 1 | 1 | 1 |
-                    // ^ (Horizontal rows (1st input))
-
-                    // boardPositions[1st][2nd]
-                    session.Flags = "tie";
-                    for (int i = 0; i < 6; i++)
-                    {
-                        for (int e = 0; e < 7; e++)
-                        {
-                            if (session.Gameboard[i][e] == 0)
-                            {
-                                session.Flags = "incomplete";
-                            }
-
-                            if ((session.Gameboard[i][e] == 1 || session.Gameboard[i][e] == 2) && (i <= 2 && e <= 3))
-                            {
-                                if (session.Gameboard[i][e] == session.Gameboard[i + 1][e + 1] && session.Gameboard[i + 1][e + 1] == session.Gameboard[i + 2][e + 2] && session.Gameboard[i + 2][e + 2] == session.Gameboard[i + 3][e + 3])
-                                {
-                                    session.Flags = "complete";
-                                    return session.Flags;
-                                }
-                            }
-
-                            if ((session.Gameboard[i][e] == 1 || session.Gameboard[i][e] == 2) && (i >= 3 && e <= 3))
-                            {
-                                if (session.Gameboard[i][e] == session.Gameboard[i - 1][e + 1] && session.Gameboard[i - 1][e + 1] == session.Gameboard[i - 2][e + 2] && session.Gameboard[i - 2][e + 2] == session.Gameboard[i - 3][e + 3])
-                                {
-                                    session.Flags = "complete";
-                                    return session.Flags;
-                                }
-                            }
-
-                            if ((session.Gameboard[i][e] == 1 || session.Gameboard[i][e] == 2) && (i < 6 && e <= 3))
-                            {
-                                if (session.Gameboard[i][e] == session.Gameboard[i][e + 1] && session.Gameboard[i][e + 1] == session.Gameboard[i][e + 2] && session.Gameboard[i][e + 2] == session.Gameboard[i][e + 3])
-                                {
-                                    session.Flags = "complete";
-                                    return session.Flags;
-                                }
-                            }
-
-                            if ((session.Gameboard[i][e] == 1 || session.Gameboard[i][e] == 2) && (i <= 2 && e < 6))
-                            {
-                                if (session.Gameboard[i][e] == session.Gameboard[i + 1][e] && session.Gameboard[i + 1][e] == session.Gameboard[i + 2][e] && session.Gameboard[i + 2][e] == session.Gameboard[i + 3][e])
-                                {
-                                    session.Flags = "complete";
-                                    return session.Flags;
-                                }
-                            }
-                        }
-                    }
-                    return session.Flags;
-                }
-
-                async Task EndGame(Connect4Session session, RestUserMessage msg)
-                {
-                    try { await msg.DeleteAsync(); }
-                    catch { }
-                    var FinalBoard = drawGameboard(session) + Environment.NewLine;
-
-                    if (session.Flags == "tie")
-                    {
-                        await session.Channel.SendMessageAsync(FinalBoard + "It was a tie! BOOOOO!!!");
-                        await terminateGame(session, true);
-                        return;
-                    }
-                    else if (session.Flags == "complete")
-                    {
-                        if (session.PlayerTurn == 1)
-                            await session.Channel.SendMessageAsync(FinalBoard + $"<@!{session.PlayerOne.Id}> WINS!");
-                        else
-                            await session.Channel.SendMessageAsync(FinalBoard + $"<@!{session.PlayerTwo.Id}> WINS!");
-                        await terminateGame(session, true);
-                        return;
-                    }
-                    else
-                    {
-                        await terminateGame(session, false);
-                        return;
-                    }
-                }
-
-                //The game itself!!
-                async Task playGame(Connect4Session session)
-                {
-                    while (session.Flags != "complete" || session.Flags != "tie")
-                    {
-                        var MessageToSend = "";
-                        if (session.Flags == "full")
-                            MessageToSend += $"Column {session.RequestedColumn+1} is full! Please choose another." + Environment.NewLine + Environment.NewLine;
-
-                        MessageToSend += drawGameboard(session) + Environment.NewLine;
-
-                        if (session.PlayerTurn == 1)
-                            MessageToSend += $"{playerPiece1} <@!{session.PlayerOne.Id}>, it's your turn. Type $connect4 (Number between 1-7)";
-                        else
-                            MessageToSend += $"{playerPiece2} <@!{session.PlayerTwo.Id}>, it's your turn. Type $connect4 (Number between 1-7)";
-
-                        var SentInfo = await session.Channel.SendMessageAsync(MessageToSend);
-
-                        while (session.RequestedColumn == 0)
-                        {
-                            if (session.Flags == "end")
-                            {
-                                await terminateGame(session, false);
-                                return;
-                            }
-                            else if (session.Flags == "refresh") break;
-                            else await Task.Delay(1000);
-                        }
-
-                        if (session.Flags == "refresh")
-                        {
-                            try { await SentInfo.DeleteAsync(); }
-                            catch { }
-                            session.Flags = "incomplete";
-                            continue;
-                        }
-
-                        var success = UpdateGameboard(session, SentInfo);
-                        session.RequestedColumn = 0;
-                        if (!success) { session.Flags = "full"; continue; }
-
-
-                        var result = FourInARow(session);
-                        if (result == "incomplete")
-                        {
-                            if (session.PlayerTurn == 1) session.PlayerTurn = 2;
-                            else session.PlayerTurn = 1;
-                            continue;
-                        }
-                        else {
-                            await EndGame(session, SentInfo);
-                            return;
-                        }
-                    }
-                }
-
-            }).Start();
-        }
-
         [Command("connect4")]
-        [Summary("Play your favorite game, CONNECT 4! [`create`, `join`, `info`, `refresh`, `end`, `{1-7}`]")]
+        [Summary("Play your favorite game, CONNECT 4! [`create`, `join`, `info`, `refresh`, `end`]")]
         public async Task OHMYGODITSMYFAVORITEGAMECONNECT4(string command)
         {
             Connect4Session _CurrentSession = null;
-            foreach (Connect4Session session in Connect4)
+            foreach (Connect4Session session in Connect4SessionList)
                 if (session.Channel == Context.Channel) _CurrentSession = session;
 
             if (command == "info")
             {
-                if (Connect4.Count == 0)
+                if (Connect4SessionList.Count == 0)
                 {
                     await Context.Channel.SendMessageAsync("There are no active Connect 4 games.");
                     return;
                 }
 
-                var e = Connect4.GetEnumerator();
+                var e = Connect4SessionList.GetEnumerator();
                 string listMessage = "";
                 string currentLine = "There are currently no games on this channel." + Environment.NewLine;
 
@@ -411,13 +135,13 @@ namespace Trump_Bot.Modules
                     listMessage = listMessage + currentLine + Environment.NewLine;
                 }
 
-                listMessage = listMessage + "Total games started since last restart: " + Connect4.Count;
+                listMessage = listMessage + "Total games started since last restart: " + Connect4SessionList.Count;
                 await Context.Channel.SendMessageAsync(listMessage);
             }
             else if (command == "create")
             {
                 bool ExistingGame = false;
-                foreach (Connect4Session session in Connect4)
+                foreach (Connect4Session session in Connect4SessionList)
                     if (session.Channel == Context.Channel) ExistingGame = true;
 
                 if (ExistingGame)
@@ -428,7 +152,7 @@ namespace Trump_Bot.Modules
                 else
                 {
                     var Player1 = Context.User.Id.ToString();
-                    Connect4.Add(new Connect4Session
+                    Connect4SessionList.Add(new Connect4Session
                     {
                         Channel = Context.Channel,
                         PlayerOne = Context.User
@@ -445,7 +169,8 @@ namespace Trump_Bot.Modules
                     {
                         _CurrentSession.PlayerTwo = Context.User;
                         await Context.Channel.SendMessageAsync($"{Context.User.Username} has successfully joined the match.");
-                    } else await temporaryMessage($"{Context.User.Username}, this match is already full!", Context.Channel, 5000);
+                    }
+                    else await temporaryMessage($"{Context.User.Username}, this match is already full!", Context.Channel, 5000);
                 }
                 else
                 {
@@ -453,49 +178,6 @@ namespace Trump_Bot.Modules
                 }
 
 
-            }
-            else if (command == "1" || command == "2" || command == "3" || command == "4" || command == "5" || command == "6" || command == "7")
-            {
-                if (_CurrentSession == null)
-                {
-                    await temporaryMessage($"{Context.User.Username}, no match exists!", Context.Channel, 5000);
-                    return;
-                }
-
-                if (_CurrentSession.PlayerTwo == null)
-                {
-                    await temporaryMessage($"{Context.User.Username}, this match is not ready yet!", Context.Channel, 5000);
-                    return;
-                }
-
-                if (Context.User == _CurrentSession.PlayerOne || Context.User == _CurrentSession.PlayerTwo)
-                {
-                    if (_CurrentSession.PlayerTurn == 1)
-                    {
-                        if (Context.User == _CurrentSession.PlayerOne)
-                            _CurrentSession.RequestedColumn = Int32.Parse(command);
-                        else
-                        {
-                            await temporaryMessage($"{Context.User.Username}, it's not your turn!", Context.Channel, 5000);
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        if (Context.User == _CurrentSession.PlayerTwo)
-                            _CurrentSession.RequestedColumn = Int32.Parse(command);
-                        else
-                        {
-                            await temporaryMessage($"{Context.User.Username}, it's not your turn!", Context.Channel, 5000);
-                            return;
-                        }
-                    }
-                }
-                else
-                {
-                    await temporaryMessage($"{Context.User.Username}, you are not in this match!", Context.Channel, 5000);
-                    return;
-                }
             }
             else if (command == "refresh")
             {
@@ -508,13 +190,14 @@ namespace Trump_Bot.Modules
                 else if (Context.User == _CurrentSession.PlayerOne || Context.User == _CurrentSession.PlayerTwo)
                 {
                     _CurrentSession.Flags = "end";
-                } else await temporaryMessage($"{Context.User.Username}, you are not in this match!", Context.Channel, 5000);
+                }
+                else await temporaryMessage($"{Context.User.Username}, you are not in this match!", Context.Channel, 5000);
             }
             else
             {
                 if (command != "info")
                 {
-                    await Context.Channel.SendMessageAsync("Invalid command. Please only create, join, info, refresh, or end, or if you are already in a match, enter 1-7");
+                    await Context.Channel.SendMessageAsync("Invalid command. Please only create, join, info, refresh, or end.");
                 }
             }
             await Context.Message.DeleteAsync();

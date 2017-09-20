@@ -20,7 +20,7 @@ namespace Trump_Bot
             InitializeComponent();
         }
 
-        private static DiscordSocketClient _client;
+        private DiscordSocketClient _client;
         private string guildName;
         private string guildID;
         private string channelName;
@@ -47,7 +47,6 @@ namespace Trump_Bot
         public Task InitializeForm(DiscordSocketClient client)
         {
             _client = client;
-
             guildNames.Add(new List<string>());
             guildNames.Add(new List<string>());
 
@@ -94,7 +93,7 @@ namespace Trump_Bot
                     LogConsole(msg);
                 });
             else
-            Console.Text = Console.Text + Environment.NewLine + msg.ToString();
+                Console.Text = Console.Text + Environment.NewLine + msg.ToString();
             return Task.CompletedTask;
         }
 
