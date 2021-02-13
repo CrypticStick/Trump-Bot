@@ -1,4 +1,7 @@
 ﻿# Trump-Bot
+ 
+> Note: This was my very first Discord bot; it is now quite outdated
+ 
 My fantasic Discord bot code (Made with Visual Studio - C#). 
 You can add it to your server by clicking [**here**](https://discordapp.com/oauth2/authorize?client_id=321097604131717120&scope=bot&permissions=2146958591 "Add Trump-Bot to your guild!")
 
